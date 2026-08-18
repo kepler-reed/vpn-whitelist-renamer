@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>VPN Configs — White Lists Processor</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: #0f1115;
+    color: #e6e8ee;
+    min-height: 100vh;
+  }
+  header {
+    padding: 28px 24px 18px;
+    border-bottom: 1px solid #232733;
+    background: #14171f;
+  }
+  header h1 { margin: 0 0 6px; font-size: 22px; }
+  header p { margin: 0; color: #9aa3b2; font-size: 14px; }
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 22px 24px 60px;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 18px;
+    align-items: center;
+  }
+  .btn {
+    appearance: none;
+    border: 1px solid #2c3140;
+    background: #1a1f2b;
+    color: #e6e8ee;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .btn:hover { background: #232a3b; border-color: #3a4156; }
+  .btn.primary { background: #2563eb; border-color: #2563eb; }
+  .btn.primary:hover { background: #1d4ed8; }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #1a1f2b;
+    border: 1px solid #2c3140;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #9aa3b2;
+  }
+  .pill b { color: #e6e8ee; font-weight: 600; }
+  .file-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+    margin-bottom: 22px;
+  }
+  .file-card {
+    background: #14171f;
+    border: 1px solid #232733;
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .file-card h3 {
+    margin: 0 0 4px;
+    font-size: 14px;
+    color: #9aa3b2;
+    font-weight: 500;
+  }
+  .file-card .meta {
+    font-size: 12px;
+    color: #6b7384;
+    word-break: break-all;
+  }
+  .file-card .count {
+    font-size: 22px;
+    font-weight: 600;
+    margin-top: 6px;
+    color: #e6e8ee;
+  }
+  .out-block {
+    margin-top: 22px;
+    background: #14171f;
+    border: 1px solid #232733;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .out-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #1a1f2b;
+    border-bottom: 1px solid #232733;
+  }
+  .out-head h2 { margin: 0; font-size: 15px; }
+  textarea {
+    width: 100%;
+    min-height: 320px;
+    background: #0c0e13;
+    color: #d6dae3;
+    border: 0;
+    padding: 14px 16px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.5;
+    resize: vertical;
+  }
+  textarea:focus { outline: 0; }
+  .status {
+    margin-top: 14px;
+    font-size: 13px;
+    color: #9aa3b2;
+    min-height: 18px;
+  }
+  .status.err { color: #f87171; }
+  .status.ok { color: #4ade80; }
+  .copy-hint { font-size: 12px; color: #6b7384; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛡 VPN Configs — White Lists Processor</h1>
+  <p>Загружает 3 источника, переименовывает серверы по формату <code>🇷🇺 Россия №1</code>, добавляет описание <code>?serverDescription=&lt;base64&gt;</code> и выдаёт готовый список для подписки.</p>
+</header>
+
+<main>
+  <div class="toolbar">
+    <button class="btn primary" id="btnRun">� Обработать</button>
+    <button class="btn" id="btnCopy" disabled>📋 Скопировать</button>
+    <button class="btn" id="btnDownload" disabled>💾 Скачать .txt</button>
+    <span class="pill">Источник: <b id="srcCount">3</b></span>
+  </div>
+
+  <div class="file-list" id="fileList"></div>
+
+  <div class="out-block">
+    <div class="out-head">
+      <h2>Результат</h2>
+      <span class="copy-hint" id="outHint">ещё не обработано</span>
+    </div>
+    <textarea id="out" placeholder="Нажми «Обработать»…" readonly></textarea>
+  </div>
+
+  <div class="status" id="status">Готов к работе.</div>
+</main>
+
+<script>
+/* ---------- Словарь стран EN → RU ---------- */
+const COUNTRY_RU = {
+  "Russia": "Россия",
+  "United States": "США",
+  "USA": "США",
+  "United Kingdom": "Великобритания",
+  "UK": "Великобритания",
+  "Germany": "Германия",
+  "France": "Франция",
+  "Poland": "Польша",
+  "Czechia": "Чехия",
+  "Czech Republic": "Чехия",
+  "Netherlands": "Нидерланды",
+  "Holland": "Нидерланды",
+  "Finland": "Финляндия",
+  "Sweden": "Швеция",
+  "Norway": "Норвегия",
+  "Switzerland": "Швейцария",
+  "Austria": "Австрия",
+  "Italy": "Италия",
+  "Spain": "Испания",
+  "Portugal": "Португалия",
+  "Romania": "Румыния",
+  "Bulgaria": "Болгария",
+  "Hungary": "Венгрия",
+  "Slovakia": "Словакия",
+  "Slovenia": "Словения",
+  "Croatia": "Хорватия",
+  "Serbia": "Сербия",
+  "Greece": "Греция",
+  "Turkey": "Турция",
+  "Ukraine": "Украина",
+  "Belarus": "Беларусь",
+  "Moldova": "Молдова",
+  "Lithuania": "Литва",
+  "Latvia": "Латвия",
+  "Estonia": "Эстония",
+  "Ireland": "Ирландия",
+  "Iceland": "Исландия",
+  "Denmark": "Дания",
+  "Belgium": "Бельгия",
+  "Luxembourg": "Люксембург",
+  "Japan": "Япония",
+  "South Korea": "Южная Корея",
+  "Korea": "Корея",
+  "China": "Китай",
+  "Hong Kong": "Гонконг",
+  "Taiwan": "Тайвань",
+  "Singapore": "Сингапур",
+  "India": "Индия",
+  "Israel": "Израиль",
+  "UAE": "ОАЭ",
+  "United Arab Emirates": "ОАЭ",
+  "Canada": "Канада",
+  "Mexico": "Мексика",
+  "Brazil": "Бразилия",
+  "Argentina": "Аргентина",
+  "Australia": "Австралия",
+  "New Zealand": "Новая Зеландия",
+  "South Africa": "ЮАР",
+  "Egypt": "Египет",
+  "Kazakhstan": "Казахстан",
+  "Georgia": "Грузия",
+  "Armenia": "Армения",
+  "Azerbaijan": "Азербайджан",
+};
+
+function ruName(enName) {
+  if (!enName) return enName;
+  if (COUNTRY_RU[enName]) return COUNTRY_RU[enName];
+  // fallback: транслитерация на латинице (если ничего нет в словаре — оставляем как есть, в Title Case)
+  return enName;
+}
+
+/* ---------- Источники ---------- */
+const SOURCES = [
+  { id: "mobile", label: "Vless Reality · Mobile",  url: "https://raw.githack.com/igareck/vpn-configs-for-russia/main/Vless-Reality-White-Lists-Rus-Mobile.txt" },
+  { id: "all",    label: "WHITE-CIDR-RU-all",       url: "https://raw.githack.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-all.txt" },
+  { id: "checked",label: "WHITE-CIDR-RU-checked",   url: "https://raw.githack.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-checked.txt" },
+];
+
+/* ---------- Описание (serverDescription) ---------- */
+// "Белые списки" → UTF-8 → base64
+const DESCRIPTION_TEXT = "Белые списки";
+const DESCRIPTION_B64 = "0JHQtdC70YvQtSDRgdC/0LjRgdC60Lg=";
+
+/* ---------- Регэкспы ---------- */
+// Захватываем из URL-decoded фрагмента после #:
+// - либо один флаг (2 региональных индикатора U+1F1E6..U+1F1FF) + название страны
+// - либо 🌐 + "Anycast-IP"  (для записей вида "🌐 Anycast-IP | 🇨🇭 🇳🇱 | [*CIDR]")
+// После названия может идти любой хвост (| , •, [, …, тире и т.д.)
+// Используем флаг /u чтобы корректно работать с Unicode code points (флаги — это 2 кодовых точки > 0xFFFF).
+const FLAG_RE = /^([\u{1F1E6}-\u{1F1FF}]{2}|🌐)\s*([A-Za-z][A-Za-z\s\-]*?)(?=\s*[|\u2022\u2756\u2014\u2013\[\u2026]|$)/u;
+
+/* ---------- Парсинг одной строки ---------- */
+function renameLine(line, counters) {
+  // Ищем первый '#' после схемы vless://... или vmess://... или ss://...
+  const hashIdx = line.indexOf("#");
+  if (hashIdx === -1) return null;
+
+  const urlPart = line.slice(0, hashIdx);
+  const fragmentEnc = line.slice(hashIdx + 1);
+
+  let fragment;
+  try {
+    fragment = decodeURIComponent(fragmentEnc);
+  } catch (e) {
+    fragment = fragmentEnc;
+  }
+
+  const m = fragment.match(FLAG_RE);
+  if (!m) return null;
+
+  const symbol = m[1];
+  const countryEn = m[2].trim();
+  // 🌐 → Anycast; обычный флаг → EN→RU через словарь
+  const countryRu = symbol === "🌐" ? `Anycast (${countryEn})` : ruName(countryEn);
+
+  counters[countryRu] = (counters[countryRu] || 0) + 1;
+  const num = counters[countryRu];
+  const newTitle = `${symbol} ${countryRu} №${num}`;
+
+  const newTitleEnc = encodeURIComponent(newTitle);
+  const newFragment = `${newTitleEnc}?serverDescription=${DESCRIPTION_B64}`;
+
+  return `${urlPart}#${newFragment}`;
+}
+
+/* ---------- Загрузка одного источника ---------- */
+async function fetchSource(src) {
+  const r = await fetch(src.url, { cache: "no-store" });
+  if (!r.ok) throw new Error(`HTTP ${r.status} для ${src.id}`);
+  const txt = await r.text();
+  return txt;
+}
+
+/* ---------- Главный обработчик ---------- */
+async function processAll() {
+  const btnRun = document.getElementById("btnRun");
+  const btnCopy = document.getElementById("btnCopy");
+  const btnDl = document.getElementById("btnDownload");
+  const out = document.getElementById("out");
+  const status = document.getElementById("status");
+  const hint = document.getElementById("outHint");
+  const fileList = document.getElementById("fileList");
+
+  btnRun.disabled = true; btnCopy.disabled = true; btnDl.disabled = true;
+  out.value = "";
+  status.className = "status";
+  status.textContent = "Загружаю источники…";
+  fileList.innerHTML = "";
+
+  const counters = {};
+  const results = [];
+  const errors = [];
+
+  for (const src of SOURCES) {
+    try {
+      const txt = await fetchSource(src);
+      const lines = txt.split(/\r?\n/);
+      const beforeCount = { ...counters };
+      const renamed = [];
+      for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) continue;
+        if (line.startsWith("#")) continue; // убираем все # комментарии
+        const r = renameLine(line, counters);
+        if (r !== null) renamed.push(r);
+      }
+      results.push({ src, lines: renamed });
+
+      // карточка
+      const card = document.createElement("div");
+      card.className = "file-card";
+      card.innerHTML = `
+        <h3>${src.label}</h3>
+        <div class="meta">${src.url}</div>
+        <div class="count">${renamed.length}</div>
+      `;
+      fileList.appendChild(card);
+    } catch (e) {
+      errors.push(`${src.id}: ${e.message}`);
+      const card = document.createElement("div");
+      card.className = "file-card";
+      card.style.borderColor = "#7f1d1d";
+      card.innerHTML = `
+        <h3 style="color:#f87171">⚠ ${src.label}</h3>
+        <div class="meta">${e.message}</div>
+        <div class="count">—</div>
+      `;
+      fileList.appendChild(card);
+    }
+  }
+
+  // Объединяем всё в один список (порядок: mobile → all → checked)
+  const outLines = [];
+  for (const { lines } of results) outLines.push(...lines);
+  const finalTxt = outLines.join("\n") + "\n";
+
+  out.value = finalTxt;
+  hint.textContent = `${outLines.length} строк · ${Object.keys(counters).length} стран`;
+
+  btnRun.disabled = false;
+  if (outLines.length > 0) {
+    btnCopy.disabled = false;
+    btnDl.disabled = false;
+    status.className = errors.length ? "status err" : "status ok";
+    status.textContent = errors.length
+      ? `Готово с предупреждениями: ${outLines.length} строк. Ошибки: ${errors.join("; ")}`
+      : `Готово ✓ ${outLines.length} строк обработано.`;
+  } else {
+    status.className = "status err";
+    status.textContent = "Не удалось получить ни одной строки. " + errors.join("; ");
+  }
+}
+
+/* ---------- Кнопки ---------- */
+document.getElementById("btnRun").addEventListener("click", processAll);
+document.getElementById("btnCopy").addEventListener("click", async () => {
+  const out = document.getElementById("out");
+  const status = document.getElementById("status");
+  try {
+    await navigator.clipboard.writeText(out.value);
+    status.className = "status ok";
+    status.textContent = "Скопировано в буфер ✓";
+  } catch (e) {
+    out.select(); document.execCommand("copy");
+    status.textContent = "Скопировано (fallback) ✓";
+  }
+});
+document.getElementById("btnDownload").addEventListener("click", () => {
+  const out = document.getElementById("out");
+  const blob = new Blob([out.value], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "vpn-white-lists-processed.txt";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+});
+
+/* ---------- Старт ---------- */
+window.addEventListener("DOMContentLoaded", () => {
+  // автозапуск при загрузке, чтобы сразу был результат
+  processAll();
+});
+</script>
+</body>
+</html>
