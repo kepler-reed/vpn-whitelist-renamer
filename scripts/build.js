@@ -86,13 +86,7 @@ function parseLine(line) {
     });
   }
 
-  const header = [
-    '# VPN White Lists - auto-generated',
-    `# Updated: ${new Date().toISOString()}`,
-    `# Total: ${out.length}`,
-    `# Countries: ${order.length}`,
-    '',
-  ].join('\n');
+  const header = '#providerid vnrnpz2C\n';
 
   const body = out.join('\n') + '\n';
   fs.writeFileSync(path.join(__dirname, '..', 'subs.txt'), header + body);
