@@ -29,6 +29,8 @@ jobs:
             git add subs.txt
             git commit -m "chore: regenerate subs.txt"
             git push
+            echo "Purging jsDelivr cache..."
+            curl -sS -X POST "https://purge.jsdelivr.net/gh/kepler-reed/vpn-whitelist-renamer@main/subs.txt"
           else
             echo "subs.txt unchanged, skipping commit"
           fi
