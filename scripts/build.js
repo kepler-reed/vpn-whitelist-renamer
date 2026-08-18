@@ -80,7 +80,7 @@ function parseLine(line) {
     const entries = grouped[country];
     entries.forEach((e, i) => {
       const num = i + 1;
-      const title = `${e.symbol} ${country} №${num}`;
+      const title = `${e.symbol} ${country} №${num} [Белые списки]`;
       const titleEnc = encodeURIComponent(title);
       out.push(`${e.urlPart}#${titleEnc}?serverDescription=${DESC_B64}`);
     });
